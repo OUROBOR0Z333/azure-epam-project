@@ -1,5 +1,5 @@
-# Database Module
-# Creates Azure Database for MySQL
+# Azure Database Module (MySQL Single Server - Free Tier Compatible)
+# Creates Azure Database for MySQL Single Server
 
 terraform {
   required_version = ">= 1.0"
@@ -11,25 +11,41 @@ terraform {
   }
 }
 
-# MySQL Flexible Server
-resource "azurerm_mysql_flexible_server" "main" {
-  name                   = var.mysql_server_name
-  location               = var.location
-  resource_group_name    = var.resource_group_name
-  version                = var.mysql_version
-  administrator_login    = var.mysql_administrator_login
-  administrator_password = var.mysql_administrator_password
-  sku_name               = var.mysql_sku_name
-  backup_retention_days  = var.mysql_backup_retention_days
+# Data source to get the resource group
+data "azurerm_resource_group" "main" {
+  name = var.resource_group_name
+}
+
+# Data source to get the private subnet
+data "azurerm_subnet" "private" {
+  name                 = var.private_subnet_name
+  virtual_network_name = var.virtual_network_name
+  resource_group_name  = var.resource_group_name
+}
+
+# Data source to get the virtual network
+data "azurerm_virtual_network" "main" {
+  name                = var.virtual_network_name
+  resource_group_name = var.resource_group_name
+}
+
+# MySQL Single Server (Free Tier Compatible)
+resource "azurerm_mysql_server" "main" {
+  name                = var.mysql_server_name
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  administrator_login          = var.mysql_administrator_login
+  administrator_password       = var.mysql_administrator_password
+  version                      = var.mysql_version
+  ssl_enforcement_enabled      = true
+
+  # Use a free tier compatible SKU
+  sku_name = var.mysql_sku_name
+  storage_mb = var.mysql_storage_mb
+
+  backup_retention_days        = var.mysql_backup_retention_days
   geo_redundant_backup_enabled = var.mysql_geo_redundant_backup_enabled
-
-  storage {
-    size_gb = var.mysql_storage_gb
-  }
-
-  # Include delegated_subnet_id if provided
-  delegated_subnet_id    = var.delegated_subnet_id != "" ? var.delegated_subnet_id : null
-  private_dns_zone_id    = azurerm_private_dns_zone.mysql.id
 
   tags = {
     Environment = var.environment
@@ -39,10 +55,10 @@ resource "azurerm_mysql_flexible_server" "main" {
 }
 
 # MySQL Database
-resource "azurerm_mysql_flexible_database" "main" {
+resource "azurerm_mysql_database" "main" {
   name                = var.mysql_database_name
   resource_group_name = var.resource_group_name
-  server_name         = azurerm_mysql_flexible_server.main.name
+  server_name         = azurerm_mysql_server.main.name
   charset             = "utf8"
   collation           = "utf8_unicode_ci"
 }
@@ -58,33 +74,33 @@ resource "azurerm_private_dns_zone_virtual_network_link" "mysql" {
   name                  = "${var.mysql_server_name}-dns-link"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.mysql.name
-  virtual_network_id    = var.virtual_network_id
+  virtual_network_id    = data.azurerm_virtual_network.main.id
 }
 
 # Outputs
 output "mysql_server_id" {
   description = "The ID of the MySQL server"
-  value       = azurerm_mysql_flexible_server.main.id
+  value       = azurerm_mysql_server.main.id
 }
 
 output "mysql_server_name" {
   description = "The name of the MySQL server"
-  value       = azurerm_mysql_flexible_server.main.name
+  value       = azurerm_mysql_server.main.name
 }
 
 output "mysql_server_fqdn" {
   description = "The FQDN of the MySQL server"
-  value       = azurerm_mysql_flexible_server.main.fqdn
+  value       = azurerm_mysql_server.main.fqdn
 }
 
 output "mysql_database_id" {
   description = "The ID of the MySQL database"
-  value       = azurerm_mysql_flexible_database.main.id
+  value       = azurerm_mysql_database.main.id
 }
 
 output "mysql_database_name" {
   description = "The name of the MySQL database"
-  value       = azurerm_mysql_flexible_database.main.name
+  value       = azurerm_mysql_database.main.name
 }
 
 output "private_dns_zone_id" {

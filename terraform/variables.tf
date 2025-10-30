@@ -95,19 +95,19 @@ variable "mysql_administrator_password" {
 variable "mysql_version" {
   description = "MySQL version to use"
   type        = string
-  default     = "8.0.21"
+  default     = "8.0"
 }
 
 variable "mysql_sku_name" {
   description = "SKU name for MySQL server"
   type        = string
-  default     = "B_Standard_B1ms"
+  default     = "B_Gen5_1"  # Free Tier Compatible SKU
 }
 
 variable "mysql_storage_gb" {
   description = "Storage size for MySQL server in GB"
   type        = number
-  default     = 20
+  default     = 5  # Free Tier maximum
 }
 
 variable "mysql_backup_retention_days" {

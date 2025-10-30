@@ -1,0 +1,74 @@
+name: 1.4-foundation-create-mysql-single-server
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'qa'
+        type: choice
+        options:
+          - qa
+          - prod
+
+jobs:
+  create-mysql-single-server:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Azure CLI
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Create MySQL Single Server (Free Tier Compatible)
+      run: |
+        # Generate a unique server name
+        SERVER_NAME="mysql-${{ inputs.environment }}-$(date +%s | tail -c 6)"
+        
+        echo "Creating MySQL Single Server: $SERVER_NAME"
+        
+        az mysql server create \
+          --resource-group rg-${{ inputs.environment }}-movie-analyst \
+          --name $SERVER_NAME \
+          --location "East US" \
+          --admin-user mysqladmin \
+          --admin-password ${{ secrets.DB_ROOT_PASSWORD }} \
+          --sku-name B_Gen5_1 \
+          --version 8.0 \
+          --ssl-enforcement Enabled \
+          --storage-size 5120 \
+          --backup-retention 7
+        
+        echo "MYSQL_SERVER_NAME=$SERVER_NAME" >> $GITHUB_ENV
+
+    - name: Create Database
+      run: |
+        az mysql db create \
+          --resource-group rg-${{ inputs.environment }}-movie-analyst \
+          --server-name ${{ env.MYSQL_SERVER_NAME }} \
+          --name moviedb
+
+    - name: Configure Firewall (Allow Azure Services)
+      run: |
+        az mysql server firewall-rule create \
+          --resource-group rg-${{ inputs.environment }}-movie-analyst \
+          --server-name ${{ env.MYSQL_SERVER_NAME }} \
+          --name AllowAzureServices \
+          --start-ip-address 0.0.0.0 \
+          --end-ip-address 0.0.0.0
+
+    - name: Output Server Information
+      run: |
+        echo "## MySQL Single Server Created Successfully" >> $GITHUB_STEP_SUMMARY
+        echo "Server Name: **${{ env.MYSQL_SERVER_NAME }}**" >> $GITHUB_STEP_SUMMARY
+        echo "Server FQDN: **${{ env.MYSQL_SERVER_NAME }}.mysql.database.azure.com**" >> $GITHUB_STEP_SUMMARY
+        echo "Admin User: **mysqladmin**" >> $GITHUB_STEP_SUMMARY
+        echo "Database: **moviedb**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "This MySQL Single Server is compatible with the Azure Free Tier!" >> $GITHUB_STEP_SUMMARY

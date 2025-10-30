@@ -62,12 +62,13 @@ module "database" {
   mysql_administrator_password = var.mysql_administrator_password
   mysql_sku_name            = var.mysql_sku_name
   mysql_version             = var.mysql_version
-  mysql_storage_gb          = var.mysql_storage_gb
+  mysql_storage_mb          = var.mysql_storage_gb * 1024
   mysql_backup_retention_days = var.mysql_backup_retention_days
   mysql_geo_redundant_backup_enabled = var.mysql_geo_redundant_backup_enabled
   mysql_database_name       = var.mysql_database_name
-  delegated_subnet_id       = module.network.database_subnet_id
-  virtual_network_id        = module.network.virtual_network_id
+  virtual_network_name      = module.network.virtual_network_name
+  private_subnet_name       = "snet-private-${var.environment}"
+  delegated_subnet_id       = ""
 
   depends_on = [module.network]
 }

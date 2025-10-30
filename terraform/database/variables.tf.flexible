@@ -29,7 +29,7 @@ variable "mysql_server_name" {
 variable "mysql_version" {
   description = "MySQL version to use"
   type        = string
-  default     = "8.0"
+  default     = "8.0.21"
 }
 
 variable "mysql_administrator_login" {
@@ -45,15 +45,15 @@ variable "mysql_administrator_password" {
 }
 
 variable "mysql_sku_name" {
-  description = "SKU name for MySQL server (Free Tier Compatible)"
+  description = "SKU name for MySQL server"
   type        = string
-  default     = "B_Gen5_1"  # Free Tier Compatible SKU
+  default     = "B_Standard_B1ms"
 }
 
-variable "mysql_storage_mb" {
-  description = "Storage size for MySQL server in MB (Free Tier max is 5120MB)"
+variable "mysql_storage_gb" {
+  description = "Storage size for MySQL server in GB"
   type        = number
-  default     = 5120  # 5GB - Maximum for Free Tier
+  default     = 20
 }
 
 variable "mysql_backup_retention_days" {
@@ -74,18 +74,13 @@ variable "mysql_database_name" {
   default     = "moviedb"
 }
 
-variable "virtual_network_name" {
-  description = "Name of the virtual network"
-  type        = string
-}
-
-variable "private_subnet_name" {
-  description = "Name of the private subnet"
-  type        = string
-}
-
 variable "delegated_subnet_id" {
-  description = "ID of the delegated subnet for MySQL (optional for Single Server)"
+  description = "ID of the delegated subnet for MySQL"
   type        = string
   default     = ""
+}
+
+variable "virtual_network_id" {
+  description = "ID of the virtual network"
+  type        = string
 }
