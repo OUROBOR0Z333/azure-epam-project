@@ -47,7 +47,7 @@ variable "mysql_administrator_password" {
 variable "mysql_sku_name" {
   description = "SKU name for MySQL server"
   type        = string
-  default     = "Standard_B1ms"
+  default     = "B_Standard_B1ms"
 }
 
 variable "mysql_storage_gb" {
