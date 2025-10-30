@@ -42,7 +42,7 @@ resource "azurerm_mysql_server" "main" {
 
   # Use a free tier compatible SKU
   sku_name = var.mysql_sku_name
-  storage_mb = var.mysql_storage_gb * 1024
+  storage_mb = var.mysql_storage_mb
 
   backup_retention_days        = var.mysql_backup_retention_days
   geo_redundant_backup_enabled = var.mysql_geo_redundant_backup_enabled

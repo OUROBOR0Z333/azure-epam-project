@@ -65,7 +65,7 @@ module "database" {
   mysql_administrator_password = var.mysql_administrator_password
   mysql_sku_name            = var.mysql_sku_name
   mysql_version             = var.mysql_version
-  mysql_storage_mb          = var.mysql_storage_gb * 1024
+  mysql_storage_mb          = var.mysql_storage_mb
   mysql_backup_retention_days = var.mysql_backup_retention_days
   mysql_geo_redundant_backup_enabled = var.mysql_geo_redundant_backup_enabled
   mysql_database_name       = var.mysql_database_name

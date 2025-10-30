@@ -104,10 +104,10 @@ variable "mysql_sku_name" {
   default     = "B_Gen5_1"  # Free Tier Compatible SKU
 }
 
-variable "mysql_storage_gb" {
-  description = "Storage size for MySQL server in GB"
+variable "mysql_storage_mb" {
+  description = "Storage size for MySQL server in MB"
   type        = number
-  default     = 5  # Free Tier maximum
+  default     = 5120  # 5GB - Free Tier maximum
 }
 
 variable "mysql_backup_retention_days" {
