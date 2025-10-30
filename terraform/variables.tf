@@ -18,7 +18,7 @@ variable "resource_group_name" {
 variable "location" {
   description = "Azure region for the resources"
   type        = string
-  default     = "East US"
+  default     = "Central US"
 }
 
 variable "virtual_network_name" {

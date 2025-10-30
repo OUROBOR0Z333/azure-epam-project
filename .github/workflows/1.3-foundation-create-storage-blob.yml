@@ -1,0 +1,70 @@
+name: 1.3-foundation-create-storage-blob
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'qa'
+        type: choice
+        options:
+          - qa
+          - prod
+
+jobs:
+  create-storage-blob:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Azure CLI
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Create Resource Group for Storage
+      run: |
+        az group create \
+          --name "rg-${{ inputs.environment }}-tfstate" \
+          --location "East US" \
+          --tags Environment=${{ inputs.environment }} Project=movie-analyst Module=storage
+
+    - name: Create Storage Account
+      run: |
+        # Generate a unique storage account name (must be globally unique and lowercase)
+        STORAGE_NAME="tfstate${{ inputs.environment }}$(date +%s | tail -c 6)"
+        # Ensure only lowercase letters and numbers
+        STORAGE_NAME=$(echo $STORAGE_NAME | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g')
+        # Limit to 24 characters
+        STORAGE_NAME=$(echo $STORAGE_NAME | cut -c1-24)
+        
+        echo "STORAGE_ACCOUNT_NAME=$STORAGE_NAME" >> $GITHUB_ENV
+        
+        az storage account create \
+          --name $STORAGE_NAME \
+          --resource-group "rg-${{ inputs.environment }}-tfstate" \
+          --location "East US" \
+          --sku Standard_LRS \
+          --kind StorageV2 \
+          --tags Environment=${{ inputs.environment }} Project=movie-analyst Module=storage
+
+    - name: Create Storage Container
+      run: |
+        az storage container create \
+          --name "tfstate" \
+          --account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+          --auth-mode login
+
+    - name: Output Storage Information
+      run: |
+        echo "## Storage Account Created Successfully" >> $GITHUB_STEP_SUMMARY
+        echo "Storage Account Name: **${{ env.STORAGE_ACCOUNT_NAME }}**" >> $GITHUB_STEP_SUMMARY
+        echo "Resource Group: **rg-${{ inputs.environment }}-tfstate**" >> $GITHUB_STEP_SUMMARY
+        echo "Container Name: **tfstate**" >> $GITHUB_STEP_SUMMARY
+        echo "Location: **East US**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "You can now use this storage account for Terraform remote state management." >> $GITHUB_STEP_SUMMARY
