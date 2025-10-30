@@ -19,6 +19,9 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
+  
+  # Use Azure CLI authentication (this is what the GitHub Actions workflow provides)
+  use_azuread_auth = true
 }
 
 # Foundation Module
