@@ -38,6 +38,11 @@ resource "azurerm_application_gateway" "main" {
     capacity = var.app_gateway_capacity
   }
 
+  ssl_policy {
+    policy_type = "Predefined"
+    policy_name = "AppGwSslPolicy20220101"  # Modern SSL policy that excludes deprecated protocols
+  }
+
   gateway_ip_configuration {
     name      = "appGatewayIpConfig"
     subnet_id = var.public_subnet_id

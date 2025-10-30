@@ -99,15 +99,15 @@ variable "mysql_version" {
 }
 
 variable "mysql_sku_name" {
-  description = "SKU name for MySQL server"
+  description = "SKU name for MySQL Flexible Server"
   type        = string
-  default     = "B_Gen5_1"  # Free Tier Compatible SKU
+  default     = "B_Standard_B1ms"  # Free Tier Compatible SKU for Flexible Server
 }
 
-variable "mysql_storage_mb" {
-  description = "Storage size for MySQL server in MB"
+variable "mysql_storage_gb" {
+  description = "Storage size for MySQL Flexible Server in GB"
   type        = number
-  default     = 5120  # 5GB - Free Tier maximum
+  default     = 20  # 20GB - Free Tier minimum for Flexible Server
 }
 
 variable "mysql_backup_retention_days" {
@@ -116,11 +116,7 @@ variable "mysql_backup_retention_days" {
   default     = 7
 }
 
-variable "mysql_geo_redundant_backup_enabled" {
-  description = "Enable geo-redundant backups"
-  type        = bool
-  default     = false
-}
+
 
 variable "mysql_database_name" {
   description = "Name of the MySQL database"
