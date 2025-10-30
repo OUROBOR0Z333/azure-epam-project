@@ -42,17 +42,46 @@ jobs:
         echo "ARM_SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')" >> $GITHUB_ENV
         echo "ARM_TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')" >> $GITHUB_ENV
 
-    # Clean up orphaned resources that are causing the import issues
-    - name: Clean up orphaned resources
+    # Clean up ALL existing resources that may be causing conflicts
+    - name: Clean up existing resources
       run: |
-        # Delete the existing NSG and Public IP that are causing import issues
+        # Delete resources that may be in an inconsistent state
+        echo "Deleting existing network security groups..."
         az network nsg delete --name nsg-public --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "NSG nsg-public not found or already deleted"
-        az network public-ip delete --name rg-${{ inputs.environment }}-movie-analyst-pip-bastion --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "Public IP rg-${{ inputs.environment }}-movie-analyst-pip-bastion not found or already deleted"
-        
-        # Verify deletion
-        echo "Verifying resources have been deleted..."
-        az network nsg list --resource-group rg-${{ inputs.environment }}-movie-analyst
-        az network public-ip list --resource-group rg-${{ inputs.environment }}-movie-analyst
+        az network nsg delete --name nsg-private --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "NSG nsg-private not found or already deleted"
+
+        echo "Deleting existing public IP..."
+        az network public-ip delete --name rg-${{ inputs.environment }}-movie-analyst-pip-bastion --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "Public IP not found or already deleted"
+
+        echo "Deleting existing subnets..."
+        az network vnet subnet delete --name snet-public --vnet-name vnet-movie-analyst --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "Subnet snet-public not found or already deleted"
+        az network vnet subnet delete --name snet-private --vnet-name vnet-movie-analyst --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "Subnet snet-private not found or already deleted"
+        az network vnet subnet delete --name snet-private-db --vnet-name vnet-movie-analyst --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "Subnet snet-private-db not found or already deleted"
+        az network vnet subnet delete --name AzureBastionSubnet --vnet-name vnet-movie-analyst --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "Bastion subnet not found or already deleted"
+
+        echo "Deleting existing MySQL server..."
+        az mysql server delete --name mysql-${{ inputs.environment }}-movie-analyst --resource-group rg-${{ inputs.environment }}-movie-analyst --yes --no-wait || echo "MySQL server not found or already deleted"
+
+        echo "Deleting existing virtual network..."
+        az network vnet delete --name vnet-movie-analyst --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "VNet not found or already deleted"
+
+        echo "Deleting existing resource group if needed..."
+        az group delete --name rg-${{ inputs.environment }}-movie-analyst --yes --no-wait || echo "Resource group not found or already deleted"
+
+        # Wait a bit for deletions to propagate
+        sleep 30
+        echo "Cleanup completed"
+
+    # Wait for deletion to complete
+    - name: Wait for deletions to complete
+      run: |
+        echo "Waiting for resource deletions to complete..."
+        sleep 60
+
+    # Recreate the resource group 
+    - name: Recreate Resource Group
+      run: |
+        az group create --name rg-${{ inputs.environment }}-movie-analyst --location centralus
 
     # Initialize Terraform with the remote backend
     - name: Terraform Init
@@ -70,17 +99,50 @@ jobs:
         cd terraform
         terraform validate
 
-    # Create the plan
+    # Create the plan with updated variables
     - name: Terraform Plan
       run: |
         cd terraform
         terraform plan \
           -var="environment=${{ inputs.environment }}" \
+          -var="project_name=movie-analyst" \
           -var="resource_group_name=rg-${{ inputs.environment }}-movie-analyst" \
+          -var="location=centralus" \
+          -var="virtual_network_name=vnet-movie-analyst" \
+          -var="vnet_address_space=10.0.0.0/16" \
+          -var="public_subnet_name=snet-public-${{ inputs.environment }}" \
+          -var="private_subnet_name=snet-private-${{ inputs.environment }}" \
+          -var="bastion_subnet_name=AzureBastionSubnet" \
+          -var="public_subnet_address_prefix=10.0.1.0/24" \
+          -var="private_subnet_address_prefix=10.0.2.0/24" \
+          -var="bastion_subnet_address_prefix=10.0.3.0/24" \
+          -var="ssh_access_cidr=0.0.0.0/0" \
           -var="mysql_server_name=mysql-${{ inputs.environment }}-movie-analyst" \
-          -var="mysql_administrator_login=mysqladmin" \
+          -var="mysql_administrator_login=app_admin" \
           -var="mysql_administrator_password=${{ secrets.DB_ROOT_PASSWORD }}" \
+          -var="mysql_sku_name=GP_Gen5_2" \
+          -var="mysql_version=8.0" \
+          -var="mysql_storage_mb=20480" \
+          -var="mysql_backup_retention_days=7" \
+          -var="mysql_geo_redundant_backup_enabled=false" \
+          -var="mysql_database_name=movie_db" \
+          -var="vm_name_prefix=vm-${{ inputs.environment }}-movie-analyst" \
+          -var="backend_vm_size=Standard_B2s" \
+          -var="frontend_vm_size=Standard_B2s" \
+          -var="frontend_instance_count=1" \
+          -var="admin_username=azureuser" \
           -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+          -var="app_gateway_name=appgw-${{ inputs.environment }}-movie-analyst" \
+          -var="app_gateway_sku=Standard_v2" \
+          -var="app_gateway_tier=Standard_v2" \
+          -var="app_gateway_capacity=2" \
+          -var="backend_address_pool_frontend_name=frontend-pool" \
+          -var="backend_address_pool_backend_name=backend-pool" \
+          -var="backend_http_settings_frontend_name=frontend-settings" \
+          -var="backend_http_settings_backend_name=backend-settings" \
+          -var="frontend_port=80" \
+          -var="backend_port=3030" \
+          -var="backend_path_patterns=[\"/api/*\"]" \
           -out=tfplan \
           -parallelism=4
 
