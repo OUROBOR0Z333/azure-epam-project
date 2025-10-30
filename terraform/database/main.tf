@@ -46,23 +46,21 @@ resource "azurerm_mysql_flexible_server" "main" {
     size_gb = var.mysql_storage_gb
   }
 
-  backup_retention_days        = var.mysql_backup_retention_days
+  backup_retention_days = var.mysql_backup_retention_days
 
+  # Configure private network access (remove public access)
+  public_network_access_enabled = false
+  delegated_subnet_id          = var.delegated_subnet_id
+  private_dns_zone_id          = azurerm_private_dns_zone.mysql.id
+  
   tags = {
     Environment = var.environment
     Project     = var.project_name
     Module      = "database"
   }
-
-  # Configure the delegated subnet for Flexible Server
-  delegated_subnet_id = var.delegated_subnet_id
-  
-  # Enable private access
-  private_network_access {
-    subnet_id = var.delegated_subnet_id
-  }
 }
 
+# MySQL Database (for Flexible Server)
 # MySQL Database (for Flexible Server)
 resource "azurerm_mysql_flexible_database" "main" {
   name                = var.mysql_database_name
@@ -74,7 +72,7 @@ resource "azurerm_mysql_flexible_database" "main" {
 
 # Private DNS Zone for MySQL Flexible Server
 resource "azurerm_private_dns_zone" "mysql" {
-  name                = "${azurerm_mysql_flexible_server.main.name}.private.mysql.database.azure.com"
+  name                = "${var.mysql_server_name}.private.mysql.database.azure.com"
   resource_group_name = var.resource_group_name
 }
 
@@ -86,14 +84,13 @@ resource "azurerm_private_dns_zone_virtual_network_link" "mysql" {
   virtual_network_id    = data.azurerm_virtual_network.main.id
 }
 
-# DNS Zone Flexible Server Link
-resource "azurerm_private_dns_zone_dns_record_set" "mysql_a_record" {
-  name                = azurerm_mysql_flexible_server.main.name
+# DNS A Record for MySQL Flexible Server
+resource "azurerm_private_dns_a_record" "mysql" {
+  name                = "@"
+  zone_name           = azurerm_private_dns_zone.mysql.name
   resource_group_name = var.resource_group_name
-  private_dns_zone_name = azurerm_private_dns_zone.mysql.name
   ttl                 = 300
-  type                = "A"
-  records             = [azurerm_mysql_flexible_server.main.private_ip_address]
+  records             = [azurerm_mysql_flexible_server.main.fqdn]
 }
 
 # Outputs
