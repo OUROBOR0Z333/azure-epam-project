@@ -37,6 +37,7 @@ jobs:
     - name: Set Azure Environment Variables for Terraform
       run: |
         # Extract values from the service principal credentials JSON and set environment variables
+        # These are required for the AzureRM provider to authenticate properly
         sudo apt-get update && sudo apt-get install -y jq
         echo "ARM_CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')" >> $GITHUB_ENV
         echo "ARM_CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')" >> $GITHUB_ENV
@@ -74,8 +75,12 @@ jobs:
         echo "Environment: **${{ inputs.environment }}**" >> $GITHUB_STEP_SUMMARY
         echo "Resource Group: **$(terraform output -raw resource_group_name)**" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Frontend VM Access:" >> $GITHUB_STEP_SUMMARY
-        echo "- Public IP: **$(terraform output -raw frontend_vm_public_ip)**" >> $GITHUB_STEP_SUMMARY
-        echo "- SSH Command: \`ssh azureuser@$(terraform output -raw frontend_vm_public_ip)\`" >> $GITHUB_STEP_SUMMARY
+        echo "### Azure Bastion Access:" >> $GITHUB_STEP_SUMMARY
+        echo "- Bastion FQDN: **$(terraform output -raw bastion_fqdn)**" >> $GITHUB_STEP_SUMMARY
+        echo "- Bastion Public IP: **$(terraform output -raw bastion_public_ip)**" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Note**: This is a simplified deployment with only the frontend VM for demonstration purposes."
+        echo "### Frontend VM (Private Access Only):" >> $GITHUB_STEP_SUMMARY
+        echo "- Private IP: **$(terraform output -raw frontend_vm_private_ip)**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Note**: This is a simplified deployment with Azure Bastion for secure VM access." >> $GITHUB_STEP_SUMMARY
+        echo "Access the VM through Azure Portal using the Bastion host." >> $GITHUB_STEP_SUMMARY

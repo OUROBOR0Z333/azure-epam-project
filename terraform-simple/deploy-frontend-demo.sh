@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Simple Frontend Demo Deployment Script
-# Deploys only a frontend VM to demonstrate the application is working
+# Simple Frontend Demo Deployment Script with Azure Bastion
+# Deploys frontend VM with secure Bastion access for Ansible configuration
 
-echo "=== Simple Frontend Demo Deployment ==="
-echo "This script will deploy a simplified version with just a frontend VM"
+echo "=== Simple Frontend Demo Deployment with Azure Bastion ==="
+echo "This script will deploy a simplified version with frontend VM and Azure Bastion"
 echo ""
 
 # Check if Azure CLI is installed
@@ -42,14 +42,13 @@ ls -la *.tf* 2>/dev/null || echo "No Terraform files found in current directory"
 
 # Ask user to confirm
 echo ""
-echo "Ready to deploy the simple frontend demo."
+echo "Ready to deploy the simple frontend demo with Azure Bastion."
 echo "This will create:"
 echo "  - Resource Group"
-echo "  - Virtual Network with subnet"
-echo "  - Network Security Group"
-echo "  - Public IP"
-echo "  - Network Interface"
-echo "  - Linux Virtual Machine (Ubuntu)"
+echo "  - Virtual Network with subnets"
+echo "  - Network Security Groups"
+echo "  - Azure Bastion Host"
+echo "  - Private Linux Virtual Machine (Ubuntu)"
 echo ""
 read -p "Do you want to proceed? (y/N): " -n 1 -r
 echo
@@ -111,7 +110,13 @@ fi
 
 echo ""
 echo "=== Deployment completed successfully! ==="
-echo "Check the outputs for connection information."
+echo "Check the outputs for Bastion access information."
 echo ""
+echo "You can now access your VM through Azure Bastion:"
+echo "1. Go to Azure Portal"
+echo "2. Navigate to the Bastion resource"
+echo "3. Click 'Connect' and enter VM credentials"
+echo ""
+echo "For Ansible configuration, use the private IP shown in outputs."
 
 exit 0

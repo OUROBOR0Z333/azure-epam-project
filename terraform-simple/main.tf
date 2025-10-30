@@ -1,5 +1,5 @@
-# Simple Frontend Demo Configuration
-# Deploys only a frontend VM to demonstrate the application is working
+# Simple Frontend Demo Configuration with Azure Bastion
+# Deploys frontend VM with secure Bastion access for Ansible configuration
 
 terraform {
   required_version = ">= 1.0"
@@ -28,7 +28,7 @@ provider "azurerm" {
 
 # Variables
 variable "environment" {
-  description = "The environment name (e.g. qa, prod)"
+  description = "The environment name (e.g. demo, test)"
   type        = string
   default     = "demo"
 }
@@ -81,32 +81,72 @@ resource "azurerm_virtual_network" "main" {
   }
 }
 
-# Subnet
-resource "azurerm_subnet" "frontend" {
-  name                 = "snet-frontend-${var.environment}"
+# Public Subnet (for Bastion)
+resource "azurerm_subnet" "public" {
+  name                 = "snet-public-${var.environment}"
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-# Network Security Group
-resource "azurerm_network_security_group" "frontend" {
-  name                = "nsg-frontend-${var.environment}"
+# Private Subnet (for Frontend VM)
+resource "azurerm_subnet" "private" {
+  name                 = "snet-private-${var.environment}"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = ["10.0.2.0/24"]
+
+  # Delegate subnet for VMs
+  delegation {
+    name = "delegation"
+
+    service_delegation {
+      name    = "Microsoft.VirtualMachine"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+
+# Azure Bastion Subnet
+resource "azurerm_subnet" "bastion" {
+  name                 = "AzureBastionSubnet"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = ["10.0.3.0/24"]
+}
+
+# Network Security Group for Public Subnet
+resource "azurerm_network_security_group" "public" {
+  name                = "nsg-public-${var.environment}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
 
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+# Network Security Group for Private Subnet
+resource "azurerm_network_security_group" "private" {
+  name                = "nsg-private-${var.environment}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  # Allow SSH from Bastion subnet
   security_rule {
-    name                       = "SSH"
+    name                       = "SSHFromBastion"
     priority                   = 1001
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = "*"
+    source_address_prefix      = "10.0.3.0/24"  # Bastion subnet
     destination_address_prefix = "*"
   }
 
+  # Allow HTTP from anywhere (for demo access)
   security_rule {
     name                       = "HTTP"
     priority                   = 1002
@@ -119,6 +159,7 @@ resource "azurerm_network_security_group" "frontend" {
     destination_address_prefix = "*"
   }
 
+  # Allow HTTPS from anywhere (for demo access)
   security_rule {
     name                       = "HTTPS"
     priority                   = 1003
@@ -137,15 +178,20 @@ resource "azurerm_network_security_group" "frontend" {
   }
 }
 
-# Associate NSG with Subnet
-resource "azurerm_subnet_network_security_group_association" "frontend" {
-  subnet_id                 = azurerm_subnet.frontend.id
-  network_security_group_id = azurerm_network_security_group.frontend.id
+# Associate NSGs with Subnets
+resource "azurerm_subnet_network_security_group_association" "public" {
+  subnet_id                 = azurerm_subnet.public.id
+  network_security_group_id = azurerm_network_security_group.public.id
 }
 
-# Public IP for Frontend VM
-resource "azurerm_public_ip" "frontend" {
-  name                = "pip-frontend-${var.environment}"
+resource "azurerm_subnet_network_security_group_association" "private" {
+  subnet_id                 = azurerm_subnet.private.id
+  network_security_group_id = azurerm_network_security_group.private.id
+}
+
+# Public IP for Azure Bastion
+resource "azurerm_public_ip" "bastion" {
+  name                = "pip-bastion-${var.environment}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
@@ -154,10 +200,30 @@ resource "azurerm_public_ip" "frontend" {
   tags = {
     Environment = var.environment
     Project     = var.project_name
+    Module      = "network"
   }
 }
 
-# Network Interface for Frontend VM
+# Azure Bastion Host
+resource "azurerm_bastion_host" "main" {
+  name                = "bastion-${var.environment}-${var.project_name}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  ip_configuration {
+    name                 = "bastion-ip-config"
+    subnet_id            = azurerm_subnet.bastion.id
+    public_ip_address_id = azurerm_public_ip.bastion.id
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    Module      = "network"
+  }
+}
+
+# Network Interface for Frontend VM (no public IP)
 resource "azurerm_network_interface" "frontend" {
   name                = "nic-frontend-${var.environment}"
   location            = azurerm_resource_group.main.location
@@ -165,9 +231,8 @@ resource "azurerm_network_interface" "frontend" {
 
   ip_configuration {
     name                          = "ipconfig"
-    subnet_id                     = azurerm_subnet.frontend.id
+    subnet_id                     = azurerm_subnet.private.id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id         = azurerm_public_ip.frontend.id
   }
 
   tags = {
@@ -207,26 +272,6 @@ resource "azurerm_linux_virtual_machine" "frontend" {
     Project     = var.project_name
     Role        = "frontend-demo"
   }
-
-  # Custom script extension to deploy the frontend application
-  provisioner "remote-exec" {
-    inline = [
-      "sudo apt-get update",
-      "sudo apt-get install -y docker.io",
-      "sudo systemctl start docker",
-      "sudo systemctl enable docker",
-      "sudo usermod -aG docker azureuser",
-      "# Here you would deploy your actual frontend application",
-      "# For demo purposes, we'll just show that the VM is accessible"
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-    host     = azurerm_public_ip.frontend.ip_address
-    user     = "azureuser"
-    password = var.admin_password
-  }
 }
 
 # Outputs
@@ -235,17 +280,17 @@ output "resource_group_name" {
   value       = azurerm_resource_group.main.name
 }
 
-output "frontend_vm_public_ip" {
-  description = "Public IP address of the frontend VM"
-  value       = azurerm_public_ip.frontend.ip_address
-}
-
 output "frontend_vm_private_ip" {
   description = "Private IP address of the frontend VM"
   value       = azurerm_network_interface.frontend.private_ip_address
 }
 
-output "ssh_connection_string" {
-  description = "SSH connection string to the frontend VM"
-  value       = "ssh azureuser@${azurerm_public_ip.frontend.ip_address}"
+output "bastion_public_ip" {
+  description = "Public IP address of the Azure Bastion"
+  value       = azurerm_public_ip.bastion.ip_address
+}
+
+output "bastion_fqdn" {
+  description = "FQDN of the Azure Bastion host"
+  value       = azurerm_bastion_host.main.fqdn
 }
