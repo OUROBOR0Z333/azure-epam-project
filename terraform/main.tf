@@ -20,12 +20,8 @@ provider "azurerm" {
     }
   }
   
-  # Use Azure CLI authentication with service principal from GitHub Actions
-  # This should work with the azure/login@v1 action
-  storage_use_azuread = true
-  
-  # Skip provider registration since we're using service principal auth
-  skip_provider_registration = true
+  # Use Azure CLI authentication (this will use the ARM_* environment variables set by the workflow)
+  # The ARM_* environment variables will be set by the GitHub Actions workflow
 }
 
 # Foundation Module
