@@ -46,14 +46,15 @@ variable "location" {
 }
 
 variable "ssh_public_key" {
-  description = "SSH public key for accessing the VM"
+  description = "SSH public key for accessing the VM (required for demo)"
   type        = string
 }
 
 variable "admin_password" {
-  description = "Admin password for the VM"
+  description = "Admin password for the VM (deprecated - using SSH key authentication)"
   type        = string
   sensitive   = true
+  default     = null
 }
 
 # Resource Group
@@ -238,12 +239,16 @@ resource "azurerm_linux_virtual_machine" "frontend" {
   location            = azurerm_resource_group.main.location
   size                = "Standard_B1ms"  # Free Tier eligible
   admin_username      = "azureuser"
-  admin_password      = var.admin_password
-  disable_password_authentication = false
+  disable_password_authentication = true
 
   network_interface_ids = [
     azurerm_network_interface.frontend.id,
   ]
+
+  admin_ssh_key {
+    username   = "azureuser"
+    public_key = var.ssh_public_key
+  }
 
   source_image_reference {
     publisher = "Canonical"
