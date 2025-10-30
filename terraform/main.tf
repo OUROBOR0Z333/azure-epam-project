@@ -20,8 +20,9 @@ provider "azurerm" {
     }
   }
   
-  # Use Azure CLI authentication (this is what the GitHub Actions workflow provides)
-  use_azuread_auth = true
+  # Use Azure CLI authentication with service principal from GitHub Actions
+  # This should work with the azure/login@v1 action
+  storage_use_azuread = true
 }
 
 # Foundation Module
