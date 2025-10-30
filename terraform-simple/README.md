@@ -158,5 +158,4 @@ Or delete the resource group manually in Azure Portal.
 
 You can customize this deployment by:
 1. Modifying `main.tf` to change VM size, OS, etc.
-2. Updating `variables.tf` to add new configurable parameters
-3. Adding additional resources as needed for your demo
+2. Adding additional resources as needed for your demo
