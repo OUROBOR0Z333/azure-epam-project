@@ -95,16 +95,6 @@ resource "azurerm_subnet" "private" {
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.0.2.0/24"]
-
-  # Delegate subnet for VMs
-  delegation {
-    name = "delegation"
-
-    service_delegation {
-      name    = "Microsoft.VirtualMachine"
-      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
-    }
-  }
 }
 
 # Azure Bastion Subnet
@@ -292,5 +282,5 @@ output "bastion_public_ip" {
 
 output "bastion_fqdn" {
   description = "FQDN of the Azure Bastion host"
-  value       = azurerm_bastion_host.main.fqdn
+  value       = azurerm_bastion_host.main.name
 }
