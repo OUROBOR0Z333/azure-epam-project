@@ -1,0 +1,117 @@
+name: 2.1-Cleanup-and-Redeploy-Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to (qa/prod)'
+        required: true
+        default: 'qa'
+        type: choice
+        options:
+          - qa
+          - prod
+
+env:
+  TF_ROOT: "./terraform"
+
+jobs:
+  cleanup-and-redeploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Azure CLI
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.7.0
+
+    - name: Set Azure Environment Variables for Terraform
+      run: |
+        sudo apt-get update && sudo apt-get install -y jq
+        echo "ARM_CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')" >> $GITHUB_ENV
+        echo "ARM_CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')" >> $GITHUB_ENV
+        echo "ARM_SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')" >> $GITHUB_ENV
+        echo "ARM_TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')" >> $GITHUB_ENV
+
+    # Clean up orphaned resources that are causing the import issues
+    - name: Clean up orphaned resources
+      run: |
+        # Delete the existing NSG and Public IP that are causing import issues
+        az network nsg delete --name nsg-public --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "NSG nsg-public not found or already deleted"
+        az network public-ip delete --name rg-${{ inputs.environment }}-movie-analyst-pip-bastion --resource-group rg-${{ inputs.environment }}-movie-analyst --yes || echo "Public IP rg-${{ inputs.environment }}-movie-analyst-pip-bastion not found or already deleted"
+        
+        # Verify deletion
+        echo "Verifying resources have been deleted..."
+        az network nsg list --resource-group rg-${{ inputs.environment }}-movie-analyst
+        az network public-ip list --resource-group rg-${{ inputs.environment }}-movie-analyst
+
+    # Initialize Terraform with the remote backend
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init \
+          -backend-config="resource_group_name=rg-${{ inputs.environment }}-tfstate" \
+          -backend-config="storage_account_name=tfstate${{ inputs.environment }}1367" \
+          -backend-config="container_name=tfstate" \
+          -backend-config="key=main-terraform.tfstate"
+
+    # Validate the configuration
+    - name: Terraform Validate
+      run: |
+        cd terraform
+        terraform validate
+
+    # Create the plan
+    - name: Terraform Plan
+      run: |
+        cd terraform
+        terraform plan \
+          -var="environment=${{ inputs.environment }}" \
+          -var="resource_group_name=rg-${{ inputs.environment }}-movie-analyst" \
+          -var="mysql_server_name=mysql-${{ inputs.environment }}-movie-analyst" \
+          -var="mysql_administrator_login=mysqladmin" \
+          -var="mysql_administrator_password=${{ secrets.DB_ROOT_PASSWORD }}" \
+          -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+          -out=tfplan \
+          -parallelism=4
+
+    # Apply the configuration with reduced parallelism to prevent race conditions
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply tfplan
+
+    - name: Output Deployment Information
+      run: |
+        cd terraform
+        echo "## Infrastructure Re-deployment Complete" >> $GITHUB_STEP_SUMMARY
+        echo "Environment: **${{ inputs.environment }}**" >> $GITHUB_STEP_SUMMARY
+        echo "Resource Group: **rg-${{ inputs.environment }}-movie-analyst**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Network Resources:" >> $GITHUB_STEP_SUMMARY
+        echo "- Virtual Network created" >> $GITHUB_STEP_SUMMARY
+        echo "- Public and Private subnets created" >> $GITHUB_STEP_SUMMARY
+        echo "- Azure Bastion configured for secure access" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Compute Resources:" >> $GITHUB_STEP_SUMMARY
+        echo "- Backend VM deployed" >> $GITHUB_STEP_SUMMARY
+        echo "- Frontend VM Scale Set deployed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Database Resources:" >> $GITHUB_STEP_SUMMARY
+        echo "- MySQL Server deployed" >> $GITHUB_STEP_SUMMARY
+        echo "- Database created" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Load Balancer Resources:" >> $GITHUB_STEP_SUMMARY
+        echo "- Application Gateway configured" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Provider timing bug has been addressed (using fixed provider version)"
+        echo "✅ Resources are now properly tracked in Terraform state"
