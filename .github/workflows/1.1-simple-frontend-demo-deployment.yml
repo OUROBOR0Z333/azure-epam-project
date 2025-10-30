@@ -1,0 +1,81 @@
+name: 1.1-Simple-Frontend-Demo-Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to (demo/test)'
+        required: true
+        default: 'demo'
+        type: choice
+        options:
+          - demo
+          - test
+
+env:
+  TF_ROOT: "./terraform-simple"
+
+jobs:
+  deploy-simple-frontend:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Azure CLI
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.7.0
+
+    - name: Set Azure Environment Variables for Terraform
+      run: |
+        # Extract values from the service principal credentials JSON and set environment variables
+        sudo apt-get update && sudo apt-get install -y jq
+        echo "ARM_CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')" >> $GITHUB_ENV
+        echo "ARM_CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')" >> $GITHUB_ENV
+        echo "ARM_SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')" >> $GITHUB_ENV
+        echo "ARM_TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')" >> $GITHUB_ENV
+
+    - name: Terraform Init
+      run: |
+        cd terraform-simple
+        terraform init
+
+    - name: Terraform Validate
+      run: |
+        cd terraform-simple
+        terraform validate
+
+    - name: Terraform Plan
+      run: |
+        cd terraform-simple
+        terraform plan \
+          -var="environment=${{ inputs.environment }}" \
+          -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
+          -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+          -out=tfplan
+
+    - name: Terraform Apply
+      run: |
+        cd terraform-simple
+        terraform apply tfplan
+
+    - name: Output Deployment Information
+      run: |
+        cd terraform-simple
+        echo "## Simple Frontend Demo Deployment Complete" >> $GITHUB_STEP_SUMMARY
+        echo "Environment: **${{ inputs.environment }}**" >> $GITHUB_STEP_SUMMARY
+        echo "Resource Group: **$(terraform output -raw resource_group_name)**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Frontend VM Access:" >> $GITHUB_STEP_SUMMARY
+        echo "- Public IP: **$(terraform output -raw frontend_vm_public_ip)**" >> $GITHUB_STEP_SUMMARY
+        echo "- SSH Command: \`ssh azureuser@$(terraform output -raw frontend_vm_public_ip)\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Note**: This is a simplified deployment with only the frontend VM for demonstration purposes."
