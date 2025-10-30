@@ -36,13 +36,13 @@ resource "azurerm_mysql_server" "main" {
   resource_group_name = var.resource_group_name
 
   administrator_login          = var.mysql_administrator_login
-  administrator_password       = var.mysql_administrator_password
+  administrator_login_password = var.mysql_administrator_password
   version                      = var.mysql_version
   ssl_enforcement_enabled      = true
 
   # Use a free tier compatible SKU
   sku_name = var.mysql_sku_name
-  storage_mb = var.mysql_storage_mb
+  storage_mb = var.mysql_storage_gb * 1024
 
   backup_retention_days        = var.mysql_backup_retention_days
   geo_redundant_backup_enabled = var.mysql_geo_redundant_backup_enabled
