@@ -1,0 +1,64 @@
+name: 1.3-foundation-create-storage-blob
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'qa'
+        type: choice
+        options:
+          - qa
+          - prod
+
+jobs:
+  create-storage-blob:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Azure CLI
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Create Resource Group
+      run: |
+        az group create --name rg-${{ inputs.environment }}-tfstate --location "East US"
+        
+    - name: Create Storage Account
+      run: |
+        # Generate a unique storage account name
+        STORAGE_NAME=tfstate${{ inputs.environment }}${{ github.run_number }}$(date +%s | tail -c 4)
+        # Update the storage account name to be valid (only lowercase letters and numbers)
+        STORAGE_NAME=$(echo $STORAGE_NAME | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-24)
+        echo "storage_account_name=$STORAGE_NAME" >> $GITHUB_ENV
+        
+        az storage account create \
+          --name $STORAGE_NAME \
+          --resource-group rg-${{ inputs.environment }}-tfstate \
+          --location "East US" \
+          --sku Standard_LRS \
+          --kind StorageV2
+
+    - name: Create Storage Container
+      run: |
+        az storage container create \
+          --name tfstate \
+          --account-name ${{ env.storage_account_name }} \
+          --auth-mode login
+
+    - name: Output Storage Information
+      run: |
+        echo "Storage Account Name: ${{ env.storage_account_name }}"
+        echo "Container Name: tfstate"
+        echo "Resource Group: rg-${{ inputs.environment }}-tfstate"
+
+    - name: Update README with storage info (Optional)
+      run: |
+        # This step can be used to update the README with storage information
+        echo "Storage account ${{ env.storage_account_name }} created for ${{ inputs.environment }} environment" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,5 @@
+# Example terraform.tfvars file
+# Rename to terraform.tfvars and update values before deployment
+
+environment = "qa"
+location    = "East US"

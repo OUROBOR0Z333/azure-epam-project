@@ -1,0 +1,10 @@
+# Example terraform.tfvars file
+# Update these values for your deployment
+
+environment         = "qa"
+project_name        = "movie-analyst"
+resource_group_name = "rg-qa-movie-analyst"
+location            = "East US"
+mysql_server_name   = "mysql-qa-movie-analyst"
+mysql_administrator_password = "YourSecurePassword123!"
+ssh_public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC..."

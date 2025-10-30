@@ -1,0 +1,92 @@
+name: 1.4-foundation-terraform-azure-backend-test
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to use'
+        required: true
+        default: 'qa'
+        type: choice
+        options:
+          - qa
+          - prod
+      storage_account_name:
+        description: 'Storage account name for Terraform state (from 1.2 workflow output)'
+        required: true
+        default: 'tfstateqaxxxx'
+
+jobs:
+  test-terraform-azure-backend:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.7.0
+
+    - name: Setup Azure CLI
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Set Azure Environment Variables for Terraform
+      run: |
+        # Extract values from the service principal credentials JSON and set environment variables
+        # These are required for Terraform to authenticate properly
+        echo "ARM_CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')" >> $GITHUB_ENV
+        echo "ARM_CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')" >> $GITHUB_ENV
+        echo "ARM_SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')" >> $GITHUB_ENV
+        echo "ARM_TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')" >> $GITHUB_ENV
+
+    - name: Verify Storage Account Exists
+      run: |
+        az storage account show --name ${{ inputs.storage_account_name }} --resource-group rg-${{ inputs.environment }}-tfstate
+
+    - name: Configure Terraform Backend
+      run: |
+        cat > backend.tf << EOF
+        terraform {
+          backend "azurerm" {
+            resource_group_name  = "rg-${{ inputs.environment }}-tfstate"
+            storage_account_name = "${{ inputs.storage_account_name }}"
+            container_name       = "tfstate"
+            key                  = "terraform.tfstate"
+          }
+        }
+        EOF
+        echo "Backend configuration created"
+
+    - name: Terraform Init
+      run: |
+        cd terraform-test
+        terraform init \
+          -backend-config="resource_group_name=rg-${{ inputs.environment }}-tfstate" \
+          -backend-config="storage_account_name=${{ inputs.storage_account_name }}" \
+          -backend-config="container_name=tfstate" \
+          -backend-config="key=terraform.tfstate"
+
+    - name: Terraform Validate
+      run: |
+        cd terraform-test
+        terraform validate
+
+    - name: Install jq
+      run: |
+        sudo apt-get update && sudo apt-get install -y jq
+
+    - name: Terraform Plan
+      run: |
+        cd terraform-test
+        terraform plan -var="environment=${{ inputs.environment }}"
+
+    - name: Output Results
+      run: |
+        echo "Terraform successfully tested with Azure Blob backend"
+        echo "Storage Account: ${{ inputs.storage_account_name }}"
+        echo "Environment: ${{ inputs.environment }}"

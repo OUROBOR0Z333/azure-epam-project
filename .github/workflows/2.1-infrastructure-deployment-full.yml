@@ -1,0 +1,113 @@
+name: 2.1-infrastructure-deployment-full
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'qa'
+        type: choice
+        options:
+          - qa
+          - prod
+      destroy:
+        description: 'Destroy infrastructure (use with caution)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  TF_ROOT: "./terraform"
+
+jobs:
+  terraform-deploy:
+    name: 'Terraform Deploy'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.7.0
+        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+    - name: Setup Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Set Azure Environment Variables for Terraform
+      run: |
+        # Extract values from the service principal credentials JSON and set environment variables
+        sudo apt-get update && sudo apt-get install -y jq
+        echo "ARM_CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')" >> $GITHUB_ENV
+        echo "ARM_CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')" >> $GITHUB_ENV
+        echo "ARM_SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')" >> $GITHUB_ENV
+        echo "ARM_TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')" >> $GITHUB_ENV
+
+    - name: Terraform Init
+      run: |
+        # For now, using the known storage account name from previous successful runs
+        terraform init \
+          -backend-config="resource_group_name=rg-${{ inputs.environment }}-tfstate" \
+          -backend-config="storage_account_name=tfstate${{ inputs.environment }}1367" \
+          -backend-config="container_name=tfstate" \
+          -backend-config="key=main-terraform.tfstate"
+      working-directory: ${{ env.TF_ROOT }}
+
+    - name: Terraform Validate
+      run: |
+        terraform validate
+      working-directory: ${{ env.TF_ROOT }}
+
+    - name: Terraform Plan
+      run: |
+        terraform plan \
+          -var="environment=${{ inputs.environment }}" \
+          -var="resource_group_name=rg-${{ inputs.environment }}-movie-analyst" \
+          -var="mysql_server_name=mysql-${{ inputs.environment }}-movie-analyst" \
+          -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+          -var="mysql_administrator_password=${{ secrets.DB_ROOT_PASSWORD }}" \
+          -out=tfplan
+      working-directory: ${{ env.TF_ROOT }}
+      id: plan
+
+    - name: Terraform Apply
+      if: ${{ !inputs.destroy && steps.plan.outputs.exitcode == 0 }}
+      run: |
+        terraform apply tfplan
+      working-directory: ${{ env.TF_ROOT }}
+
+    - name: Terraform Destroy
+      if: ${{ inputs.destroy }}
+      run: |
+        terraform destroy \
+          -var="environment=${{ inputs.environment }}" \
+          -var="resource_group_name=rg-${{ inputs.environment }}-movie-analyst" \
+          -var="mysql_server_name=mysql-${{ inputs.environment }}-movie-analyst" \
+          -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+          -var="mysql_administrator_password=${{ secrets.DB_ROOT_PASSWORD }}" \
+          -auto-approve
+      working-directory: ${{ env.TF_ROOT }}
+
+    - name: Terraform Plan (Destroy)
+      if: ${{ inputs.destroy }}
+      run: |
+        terraform plan \
+          -var="environment=${{ inputs.environment }}" \
+          -var="resource_group_name=rg-${{ inputs.environment }}-movie-analyst" \
+          -var="mysql_server_name=mysql-${{ inputs.environment }}-movie-analyst" \
+          -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+          -var="mysql_administrator_password=${{ secrets.DB_ROOT_PASSWORD }}" \
+          -destroy
+      working-directory: ${{ env.TF_ROOT }}
+
+    - name: Terraform Output
+      run: |
+        terraform output
+      working-directory: ${{ env.TF_ROOT }}
