@@ -1,0 +1,158 @@
+---
+# Simplified Ansible Playbook to Deploy Basic Frontend Demo
+# Focuses on demonstrating that the page is working
+
+- name: Deploy Basic Frontend Demo Application
+  hosts: frontend
+  become: yes
+  gather_facts: yes
+
+  vars:
+    app_user: "azureuser"
+    app_group: "azureuser"
+    app_port: 80
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Nginx web server
+      apt:
+        name: nginx
+        state: present
+
+    - name: Ensure Nginx is started and enabled
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Create demo index.html
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Movie Analyst Frontend Demo</title>
+              <style>
+                  body {
+                      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                      margin: 0;
+                      padding: 0;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                  }
+                  .container {
+                      background: white;
+                      padding: 2rem;
+                      border-radius: 10px;
+                      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                      text-align: center;
+                      max-width: 600px;
+                      margin: 2rem;
+                  }
+                  h1 {
+                      color: #333;
+                      margin-bottom: 1rem;
+                  }
+                  .status {
+                      background: #d4edda;
+                      color: #155724;
+                      padding: 1rem;
+                      border-radius: 5px;
+                      margin: 1rem 0;
+                      border: 1px solid #c3e6cb;
+                  }
+                  .info {
+                      background: #d1ecf1;
+                      color: #0c5460;
+                      padding: 1rem;
+                      border-radius: 5px;
+                      margin: 1rem 0;
+                      border: 1px solid #bee5eb;
+                  }
+                  .details {
+                      background: #f8f9fa;
+                      padding: 1rem;
+                      border-radius: 5px;
+                      margin: 1rem 0;
+                      text-align: left;
+                      font-family: monospace;
+                      font-size: 0.9rem;
+                  }
+                  .success-icon {
+                      font-size: 3rem;
+                      color: #28a745;
+                      margin-bottom: 1rem;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="success-icon">✓</div>
+                  <h1>🎬 Movie Analyst Frontend Demo</h1>
+                  
+                  <div class="status">
+                      <strong>✅ Application Status: RUNNING SUCCESSFULLY</strong><br>
+                      The frontend demo is now accessible and working!
+                  </div>
+                  
+                  <div class="info">
+                      <strong>ℹ️ Deployment Information:</strong><br>
+                      Host: {{ ansible_hostname }}<br>
+                      IP: {{ ansible_default_ipv4.address }}<br>
+                      Server: Nginx<br>
+                      Status: Active
+                  </div>
+                  
+                  <h2>Demo Successful!</h2>
+                  <p>This simple page demonstrates that:</p>
+                  <ul style="text-align: left; display: inline-block;">
+                      <li>✅ Azure VM is successfully deployed</li>
+                      <li>✅ Network connectivity is working</li>
+                      <li>✅ Web server is running</li>
+                      <li>✅ Application can serve pages</li>
+                      <li>✅ Infrastructure is functional</li>
+                  </ul>
+                  
+                  <div class="details">
+                      Deployment Time: {{ ansible_date_time.iso8601 }}<br>
+                      OS: {{ ansible_distribution }} {{ ansible_distribution_version }}<br>
+                      Kernel: {{ ansible_kernel }}
+                  </div>
+                  
+                  <p><em>This is a simplified demo showing that the Azure infrastructure works correctly.</em></p>
+              </div>
+          </body>
+          </html>
+        dest: /var/www/html/index.html
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Restart Nginx to apply changes
+      systemd:
+        name: nginx
+        state: restarted
+
+    - name: Wait for web server to be ready
+      uri:
+        url: "http://localhost"
+        method: GET
+        status_code: 200
+      retries: 10
+      delay: 3
+
+    - name: Display success message
+      debug:
+        msg: 
+          - "🎉 Frontend demo deployed successfully!"
+          - "🌐 Access the application at: http://{{ ansible_default_ipv4.address }}"
+          - "💡 Connect via Azure Bastion to view the page"

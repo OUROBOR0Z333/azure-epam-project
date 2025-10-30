@@ -68,6 +68,20 @@ jobs:
         cd terraform-simple
         terraform apply tfplan
 
+    - name: Setup Ansible
+      run: |
+        # Install Ansible for application deployment
+        sudo apt-get update
+        sudo apt-get install -y ansible python3-pip
+        pip3 install ansible
+
+    - name: Deploy Frontend Demo Application with Ansible
+      run: |
+        # Deploy the frontend demo application using Ansible
+        cd /home/ouroboroz/Projects/Epam_Cloud_Project/azure-epam-project/ansible
+        chmod +x deploy-simple-frontend-demo.sh
+        ./deploy-simple-frontend-demo.sh
+
     - name: Output Deployment Information
       run: |
         cd terraform-simple
@@ -84,3 +98,8 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Note**: This is a simplified deployment with Azure Bastion for secure VM access." >> $GITHUB_STEP_SUMMARY
         echo "Access the VM through Azure Portal using the Bastion host." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Frontend Demo Application:" >> $GITHUB_STEP_SUMMARY
+        echo "- Application deployed via Ansible" >> $GITHUB_STEP_SUMMARY
+        echo "- Nginx web server configured" >> $GITHUB_STEP_SUMMARY
+        echo "- Demo page accessible at http://$(terraform output -raw frontend_vm_private_ip)" >> $GITHUB_STEP_SUMMARY

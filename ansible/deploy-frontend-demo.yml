@@ -1,0 +1,237 @@
+---
+# Ansible Playbook to Deploy Frontend Demo Application
+# Installs Docker and deploys the frontend application container
+
+- name: Deploy Frontend Demo Application
+  hosts: frontend
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # Application variables
+    app_name: "movie-analyst-frontend"
+    app_port: 3030
+    docker_image: "nginx:latest"  # Placeholder - replace with your actual frontend image
+    docker_container_name: "frontend-app"
+    
+    # System variables
+    app_user: "azureuser"
+    app_group: "azureuser"
+    app_directory: "/home/{{ app_user }}/{{ app_name }}"
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required system packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg-agent
+          - software-properties-common
+          - python3-pip
+          - python3-setuptools
+        state: present
+
+    - name: Install Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        state: present
+        filename: docker
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+    - name: Ensure Docker service is started and enabled
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to docker group
+      user:
+        name: "{{ app_user }}"
+        groups: docker
+        append: yes
+
+    - name: Create application directory
+      file:
+        path: "{{ app_directory }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+
+    - name: Pull the frontend application Docker image
+      docker_image:
+        name: "{{ docker_image }}"
+        source: pull
+        force_source: yes
+
+    - name: Stop and remove existing container if it exists
+      docker_container:
+        name: "{{ docker_container_name }}"
+        state: absent
+      ignore_errors: yes
+
+    - name: Deploy frontend application container
+      docker_container:
+        name: "{{ docker_container_name }}"
+        image: "{{ docker_image }}"
+        state: started
+        restart: yes
+        ports:
+          - "{{ app_port }}:80"
+        volumes:
+          - "{{ app_directory }}/data:/usr/share/nginx/html:ro"  # Mount static content
+        networks:
+          - name: bridge
+        comparisons:
+          '*': ignore
+
+    - name: Create simple index.html for demo
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Movie Analyst Frontend Demo</title>
+              <style>
+                  body {
+                      font-family: Arial, sans-serif;
+                      margin: 40px;
+                      background-color: #f0f0f0;
+                  }
+                  .container {
+                      max-width: 800px;
+                      margin: 0 auto;
+                      background-color: white;
+                      padding: 20px;
+                      border-radius: 8px;
+                      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                  }
+                  h1 {
+                      color: #333;
+                      text-align: center;
+                  }
+                  .status {
+                      background-color: #d4edda;
+                      border: 1px solid #c3e6cb;
+                      color: #155724;
+                      padding: 15px;
+                      border-radius: 4px;
+                      margin: 20px 0;
+                  }
+                  .info {
+                      background-color: #d1ecf1;
+                      border: 1px solid #bee5eb;
+                      color: #0c5460;
+                      padding: 15px;
+                      border-radius: 4px;
+                      margin: 20px 0;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🎬 Movie Analyst Frontend Demo</h1>
+                  
+                  <div class="status">
+                      <strong>✅ Application Status: RUNNING</strong><br>
+                      This frontend application is successfully deployed and accessible!
+                  </div>
+                  
+                  <div class="info">
+                      <strong>ℹ️ Deployment Information:</strong><br>
+                      - Host: {{ ansible_hostname }}<br>
+                      - IP: {{ ansible_default_ipv4.address }}<br>
+                      - Port: {{ app_port }}<br>
+                      - Container: {{ docker_container_name }}<br>
+                      - Image: {{ docker_image }}
+                  </div>
+                  
+                  <h2>About This Demo</h2>
+                  <p>This is a simplified frontend demo showing that the Movie Analyst application can be deployed successfully on Azure infrastructure.</p>
+                  
+                  <h2>Features</h2>
+                  <ul>
+                      <li>✅ Docker container deployment</li>
+                      <li>✅ Nginx web server</li>
+                      <li>✅ Responsive design</li>
+                      <li>✅ Azure infrastructure integration</li>
+                  </ul>
+                  
+                  <h2>Next Steps</h2>
+                  <p>To fully deploy the Movie Analyst application:</p>
+                  <ol>
+                      <li>Replace this placeholder with your actual frontend code</li>
+                      <li>Connect to the backend API (when deployed)</li>
+                      <li>Add database integration</li>
+                      <li>Configure proper SSL certificates</li>
+                  </ol>
+                  
+                  <hr>
+                  <p style="text-align: center; color: #666;">
+                      Movie Analyst Frontend Demo - Azure Deployment<br>
+                      Timestamp: {{ ansible_date_time.iso8601 }}
+                  </p>
+              </div>
+          </body>
+          </html>
+        dest: "{{ app_directory }}/data/index.html"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+
+    - name: Restart frontend application container with updated content
+      docker_container:
+        name: "{{ docker_container_name }}"
+        image: "{{ docker_image }}"
+        state: started
+        restart: yes
+        ports:
+          - "{{ app_port }}:80"
+        volumes:
+          - "{{ app_directory }}/data:/usr/share/nginx/html:ro"
+        networks:
+          - name: bridge
+        comparisons:
+          '*': ignore
+
+    - name: Wait for application to be ready
+      uri:
+        url: "http://localhost:{{ app_port }}"
+        method: GET
+        status_code: 200
+      retries: 10
+      delay: 5
+
+    - name: Display application access information
+      debug:
+        msg: 
+          - "✅ Frontend application deployed successfully!"
+          - "🌐 Access the application at: http://{{ ansible_default_ipv4.address }}:{{ app_port }}"
+          - "📁 Application directory: {{ app_directory }}"
+          - "🐳 Docker container: {{ docker_container_name }}"
+          - "🖼️ Container image: {{ docker_image }}"
+
+  handlers:
+    - name: Restart docker
+      systemd:
+        name: docker
+        state: restarted
