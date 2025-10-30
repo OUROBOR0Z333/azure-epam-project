@@ -1,0 +1,110 @@
+---
+# Ansible Playbook to Deploy Movie Analyst Frontend Application
+# Deploys the actual movie-analyst-ui Node.js application from devops-rampup-repo
+
+- name: Deploy Movie Analyst Frontend Application
+  hosts: frontend
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # Application variables
+    app_name: "movie-analyst-ui"
+    app_port: 3030
+    app_user: "azureuser"
+    app_group: "azureuser"
+    app_directory: "/home/{{ app_user }}/{{ app_name }}"
+    source_directory: "/home/ouroboroz/Projects/Epam_Cloud_Project/devops-rampup-repo/{{ app_name }}"
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required system packages
+      apt:
+        name:
+          - curl
+          - git
+          - nodejs
+          - npm
+        state: present
+
+    - name: Add NodeSource repository for latest Node.js
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+        apt-get install -y nodejs
+      args:
+        executable: /bin/bash
+
+    - name: Create application directory
+      file:
+        path: "{{ app_directory }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+
+    - name: Copy application files from devops-rampup-repo
+      copy:
+        src: "{{ source_directory }}/"
+        dest: "{{ app_directory }}/"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+
+    - name: Set proper permissions for application files
+      file:
+        path: "{{ app_directory }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+        recurse: yes
+
+    - name: Install Node.js dependencies
+      npm:
+        path: "{{ app_directory }}"
+        state: present
+      become_user: "{{ app_user }}"
+
+    - name: Create systemd service file for the application
+      template:
+        src: movie-analyst-ui.service.j2
+        dest: /etc/systemd/system/movie-analyst-ui.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start the movie-analyst-ui service
+      systemd:
+        name: movie-analyst-ui
+        enabled: yes
+        state: started
+
+    - name: Wait for application to be ready
+      uri:
+        url: "http://localhost:{{ app_port }}"
+        method: GET
+        status_code: 200
+      retries: 10
+      delay: 5
+
+    - name: Display application access information
+      debug:
+        msg: 
+          - "✅ Movie Analyst Frontend Application deployed successfully!"
+          - "🌐 Access the application at: http://{{ ansible_default_ipv4.address }}:{{ app_port }}"
+          - "📁 Application directory: {{ app_directory }}"
+          - "📦 Service name: movie-analyst-ui"
+          - "🔧 Backend URL: {{ backend_url | default('localhost:3000') }}"
+
+  handlers:
+    - name: Restart movie-analyst-ui service
+      systemd:
+        name: movie-analyst-ui
+        state: restarted

@@ -1,0 +1,17 @@
+[Unit]
+Description=Movie Analyst Frontend UI
+After=network.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+WorkingDirectory={{ app_directory }}
+Environment=NODE_ENV=production
+Environment=PORT={{ app_port }}
+Environment=BACKEND_URL={{ backend_url | default('localhost:3000') }}
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
